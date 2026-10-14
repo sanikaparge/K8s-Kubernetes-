@@ -1,0 +1,688 @@
+# Kubernetes Interview Questions & Answers
+### Fundamentals • Architecture • Networking • Troubleshooting • Real-World Scenarios
+
+---
+
+## Table of Contents
+
+1. Kubernetes Fundamentals
+2. Kubernetes Architecture
+3. Pods and Workloads
+4. Services and Networking
+5. Configuration and Storage
+6. Scaling and Deployment Strategies
+7. Security and Scheduling
+8. Troubleshooting Scenarios
+9. Advanced Interview Questions
+10. Essential Commands
+
+---
+
+# 1. Kubernetes Fundamentals
+
+### Q1. What is Kubernetes?
+
+Kubernetes is an open-source container orchestration platform that automates the deployment, scaling, networking, and management of containerized applications.
+
+**Real-time example:** Suppose an e-commerce application needs four running replicas. Kubernetes can maintain the desired replica count, replace failed Pods, and expose healthy application instances through a Service.
+
+### Q2. Why do we need Kubernetes when Docker is available?
+
+Docker provides tools for building and running containers. Kubernetes manages containerized workloads across a cluster of machines.
+
+Kubernetes provides:
+- Automated scheduling.
+- Desired-state reconciliation.
+- Workload scaling.
+- Service discovery.
+- Rolling updates and rollbacks.
+- Configuration and storage orchestration.
+
+Docker Compose is useful for defining multi-container applications on a host, while Kubernetes provides cluster-level orchestration.
+
+### Q3. What is a Kubernetes cluster?
+
+A Kubernetes cluster is a collection of machines that run containerized workloads. It includes a control plane and worker nodes.
+
+The control plane manages cluster state and scheduling. Worker nodes run Pods assigned to them.
+
+### Q4. What is a Pod?
+
+A Pod is the smallest deployable unit in Kubernetes. It contains one or more containers that share the Pod's network namespace and can share mounted volumes.
+
+Containers in the same Pod share the Pod IP address and port space.
+
+### Q5. What is self-healing in Kubernetes?
+
+Self-healing is Kubernetes' ability to reconcile workloads toward their desired state.
+
+For example, if a Deployment requests three replicas and one Pod is deleted, the controllers work to create a replacement.
+
+**Important:** A standalone Pod does not automatically recreate itself after deletion. A workload controller such as a Deployment or ReplicaSet is generally responsible for maintaining replicas.
+
+### Q6. What is declarative management?
+
+Declarative management means defining the desired state in a manifest and allowing Kubernetes controllers to reconcile actual state toward it.
+
+Example:
+
+```bash
+kubectl apply -f deployment.yaml
+```
+
+If the manifest specifies four replicas, the Deployment controller attempts to maintain that replica count.
+
+### Q7. What is the difference between imperative and declarative commands?
+
+**Imperative:** Directly issue an operation.
+
+```bash
+kubectl scale deployment web --replicas=4
+```
+
+**Declarative:** Define the desired configuration in YAML and apply it.
+
+```bash
+kubectl apply -f deployment.yaml
+```
+
+Declarative manifests are especially useful for version control, repeatability, and team collaboration.
+
+---
+
+# 2. Kubernetes Architecture
+
+### Q8. What are the main control plane components?
+
+**API Server:** Receives and processes Kubernetes API requests.
+
+**etcd:** Stores cluster state and configuration data.
+
+**Scheduler:** Selects a suitable node for unscheduled Pods.
+
+**Controller Manager:** Runs controllers that reconcile actual state with desired state.
+
+**Cloud Controller Manager:** Integrates with supported cloud-provider functionality, such as load balancers and cloud node information.
+
+### Q9. What are the main worker node components?
+
+- **Kubelet:** Ensures Pods assigned to the node are running according to their specifications.
+- **Container runtime:** Runs containers, for example, containerd or CRI-O.
+- **Kube-proxy:** Implements Service networking rules in many cluster installations. Some networking implementations replace this functionality.
+
+### Q10. What happens when you run `kubectl apply -f deployment.yaml`?
+
+1. `kubectl` sends the request to the API server.
+2. The API server validates and processes the object.
+3. The desired state is stored in the cluster's datastore.
+4. Controllers create or update the required ReplicaSet and Pods.
+5. The scheduler selects nodes for unscheduled Pods.
+6. The kubelet on each selected node works with the container runtime to start the containers.
+7. Kubernetes reports the resulting status.
+
+### Q11. What happens if the scheduler fails?
+
+Existing running Pods can generally continue running because the scheduler is not responsible for continuously running their containers.
+
+However, newly created or replacement Pods that need scheduling may remain Pending until scheduling resumes or another scheduler handles them.
+
+### Q12. What happens if etcd becomes unavailable?
+
+The API server may be unable to reliably persist changes to cluster state. Cluster management operations can fail or become impaired.
+
+Existing workloads may continue running temporarily, but recovery and management capabilities are affected. A highly available production control plane should protect etcd with suitable availability and backup strategies.
+
+### Q13. Does Kubernetes require Docker Engine?
+
+No. Kubernetes uses a container runtime through the Container Runtime Interface (CRI). Common runtimes include containerd and CRI-O.
+
+Docker-built images can generally run on compatible Kubernetes container runtimes.
+
+---
+
+# 3. Pods and Workloads
+
+### Q14. What is the difference between a Pod and a container?
+
+A container is an isolated application process environment. A Pod is a Kubernetes scheduling and deployment unit that contains one or more containers.
+
+Containers within a Pod share networking and may share volumes.
+
+### Q15. What is the difference between Deployment and ReplicaSet?
+
+A Deployment manages application releases, rolling updates, and rollbacks. It creates and manages ReplicaSets.
+
+A ReplicaSet maintains the desired number of matching Pods.
+
+**Interview tip:** Use Deployments for most stateless application workloads rather than creating ReplicaSets directly.
+
+### Q16. Deployment vs StatefulSet vs DaemonSet?
+
+**Deployment:** For stateless replicas, such as web servers and APIs.
+
+**StatefulSet:** For workloads needing stable identities and commonly persistent storage, such as certain database systems.
+
+**DaemonSet:** Ensures a Pod runs on every eligible node, such as for node-level logging or monitoring.
+
+### Q17. What is the difference between scaling and self-healing?
+
+Scaling changes the desired number of replicas.
+
+Self-healing refers to reconciliation that restores workloads toward their desired state when Pods fail or disappear.
+
+Example:
+
+```bash
+kubectl scale deployment web --replicas=5
+```
+
+This changes the requested replica count to five.
+
+### Q18. What is a multi-container Pod?
+
+A Pod containing multiple closely related containers. They share the Pod network and can share volumes.
+
+A common example is an application container accompanied by a sidecar that collects logs or proxies traffic.
+
+### Q19. What are Pod phases?
+
+- `Pending`: Accepted, but not fully running.
+- `Running`: At least one container is running or starting/restarting.
+- `Succeeded`: All containers completed successfully.
+- `Failed`: All containers terminated, with at least one failure.
+- `Unknown`: The state cannot be determined.
+
+`CrashLoopBackOff` is a container waiting reason, not a Pod phase.
+
+### Q20. What is the difference between liveness and readiness probes?
+
+**Liveness probe:** Determines whether a container should be restarted because it is unhealthy.
+
+**Readiness probe:** Determines whether the application is ready to receive traffic.
+
+A container can be alive but not ready. For example, an application may have started but still be loading data.
+
+A startup probe can protect slow-starting applications from premature liveness failures.
+
+---
+
+# 4. Services and Networking
+
+### Q21. What is a Kubernetes Service?
+
+A Service provides a stable network endpoint for a group of Pods selected by labels. It helps clients reach workloads even when individual Pod IP addresses change.
+
+### Q22. What is the difference between ClusterIP, NodePort, and LoadBalancer?
+
+**ClusterIP:** Exposes the Service internally within the cluster.
+
+**NodePort:** Exposes a Service through a port on eligible nodes.
+
+**LoadBalancer:** Requests an external load balancer when supported by the cluster infrastructure.
+
+### Q23. How can a ClusterIP Service be accessed from outside the cluster?
+
+A ClusterIP is internal by default. External access can be provided through:
+- An Ingress controller.
+- A gateway or reverse proxy.
+- A NodePort or LoadBalancer Service.
+- `kubectl port-forward` for development and debugging.
+
+Port-forwarding is not a general-purpose production exposure mechanism.
+
+### Q24. What is the difference between `port`, `targetPort`, and `nodePort`?
+
+- `port`: The port exposed by the Service.
+- `targetPort`: The destination port on backend Pods.
+- `nodePort`: The port exposed on nodes for a NodePort Service.
+
+Example:
+
+```yaml
+ports:
+  - port: 80
+    targetPort: 8080
+    nodePort: 30080
+```
+
+Here, traffic reaches Service port 80, which forwards to backend Pod port 8080. NodePort 30080 is used for node-level access when the Service is configured as NodePort.
+
+### Q25. What is Ingress?
+
+Ingress is a Kubernetes API resource defining HTTP/HTTPS routing rules to Services, commonly based on hostnames and URL paths.
+
+An Ingress resource requires a compatible Ingress controller to implement its rules.
+
+### Q26. What is CoreDNS?
+
+CoreDNS provides DNS-based service discovery in many Kubernetes clusters. It enables workloads to discover Services using DNS names rather than hard-coded IP addresses.
+
+### Q27. What happens when a Service has no endpoints?
+
+Common causes include:
+- Service selectors do not match Pod labels.
+- Pods are not ready.
+- Pods do not exist in the expected namespace.
+- EndpointSlice configuration or related networking components have problems.
+
+Useful commands:
+
+```bash
+kubectl get svc
+kubectl get pods --show-labels
+kubectl get endpointslices
+kubectl describe svc <service-name>
+```
+
+### Q28. What is a NetworkPolicy?
+
+A NetworkPolicy specifies rules controlling traffic to or from selected Pods. Enforcement requires a compatible network implementation.
+
+A policy can restrict traffic between application tiers, such as allowing frontend Pods to reach backend Pods while preventing unrelated workloads from connecting.
+
+---
+
+# 5. Configuration and Storage
+
+### Q29. ConfigMap vs Secret?
+
+A ConfigMap stores non-sensitive configuration. A Secret is intended for sensitive data such as passwords and tokens.
+
+Secrets are not automatically secure merely because their data is Base64-encoded. Use access restrictions and suitable encryption-at-rest configuration.
+
+### Q30. What are PersistentVolume and PersistentVolumeClaim?
+
+A PersistentVolume (PV) represents a storage resource. A PersistentVolumeClaim (PVC) requests storage for a workload.
+
+A Pod can mount a PVC to access persistent storage, subject to the storage configuration and access modes.
+
+### Q31. What is a StorageClass?
+
+A StorageClass defines a class of storage and its provisioning configuration. It commonly supports dynamic provisioning of volumes when a suitable provisioner is available.
+
+### Q32. What is the difference between EBS and EFS in AWS EKS?
+
+**Amazon EBS:** Block storage commonly used for a workload requiring a persistent disk.
+
+**Amazon EFS:** Shared network file storage that can be mounted by multiple eligible clients.
+
+Their suitability depends on workload requirements, access patterns, storage drivers, and availability configuration.
+
+### Q33. What happens to data when a Pod is deleted?
+
+It depends on where the data is stored.
+
+- Data written only to the container's writable layer is not reliable persistent storage.
+- `emptyDir` data normally disappears when the Pod is removed from its node.
+- Data stored on a persistent volume may survive Pod replacement, subject to the underlying storage and lifecycle settings.
+
+### Q34. How should applications receive passwords and API keys?
+
+Use Kubernetes Secrets or an appropriate external secret-management integration. Restrict access through RBAC, avoid embedding credentials in images or Git repositories, and enable appropriate encryption and auditing.
+
+---
+
+# 6. Scaling and Deployment Strategies
+
+### Q35. What is HPA?
+
+The Horizontal Pod Autoscaler adjusts the replica count of a scalable workload based on supported observed metrics.
+
+For example, it can increase the number of application replicas when average CPU utilization rises above a configured target.
+
+### Q36. What is the difference between HPA and VPA?
+
+**HPA:** Adjusts the number of workload replicas.
+
+**VPA:** Recommends or adjusts container resource requests and, depending on configuration, can require Pod restarts to apply changes.
+
+They address different scaling dimensions and require suitable configuration.
+
+### Q37. What is a rolling update?
+
+A rolling update gradually replaces old application replicas with new ones. Deployment settings such as `maxSurge` and `maxUnavailable` control aspects of the update.
+
+### Q38. What is a rollback?
+
+A rollback returns a Deployment to an earlier revision when that revision remains available.
+
+```bash
+kubectl rollout history deployment/web
+kubectl rollout undo deployment/web
+kubectl rollout status deployment/web
+```
+
+### Q39. What is a canary deployment?
+
+A canary deployment exposes a new application version to a limited portion of traffic or users before wider rollout.
+
+It can reduce risk by allowing teams to observe errors and performance before increasing exposure. Kubernetes Deployments alone do not automatically implement sophisticated traffic percentages; additional routing capabilities may be needed.
+
+### Q40. How do you scale an application manually?
+
+```bash
+kubectl scale deployment web --replicas=4
+kubectl get deployment web
+kubectl get pods -o wide
+```
+
+For a durable configuration, update the manifest or configuration source as appropriate so that future reconciliation does not restore an older replica count.
+
+---
+
+# 7. Security and Scheduling
+
+### Q41. What is RBAC?
+
+Role-Based Access Control manages who can perform which actions on Kubernetes resources.
+
+Important objects:
+- Role
+- RoleBinding
+- ClusterRole
+- ClusterRoleBinding
+
+### Q42. What are taints and tolerations?
+
+A taint repels Pods that do not tolerate it. A toleration allows a Pod to be considered for scheduling onto a node with a matching taint.
+
+A toleration does not guarantee that a Pod will be scheduled on that node.
+
+### Q43. What is node affinity?
+
+Node affinity controls Pod placement based on node labels. It supports required scheduling rules and preferred scheduling rules.
+
+### Q44. What is a ServiceAccount?
+
+A ServiceAccount provides an identity for processes running inside Pods when they need to interact with the Kubernetes API or other integrated systems.
+
+Use the minimum permissions required by the workload.
+
+### Q45. How can you secure a Kubernetes application?
+
+- Apply least-privilege RBAC.
+- Restrict unnecessary network communication.
+- Use trusted, scanned container images.
+- Avoid running containers as root when possible.
+- Protect credentials and Secrets.
+- Set resource requests and limits.
+- Use suitable Pod Security controls.
+- Keep cluster components updated.
+- Audit access and monitor security events.
+
+---
+
+# 8. Real-World Troubleshooting Scenarios
+
+### Q46. Scenario: A Pod is stuck in `Pending`. How do you troubleshoot it?
+
+**Step 1: Inspect the Pod.**
+
+```bash
+kubectl describe pod <pod-name>
+```
+
+**Step 2: Review recent events.**
+
+```bash
+kubectl get events --sort-by=.metadata.creationTimestamp
+```
+
+**Step 3: Check node capacity and availability.**
+
+```bash
+kubectl get nodes
+kubectl describe nodes
+```
+
+**Investigate:** Insufficient resources, scheduling constraints, untolerated taints, unavailable volumes, and storage provisioning errors.
+
+Use the events to identify the actual cause rather than assuming every Pending Pod has a resource shortage.
+
+### Q47. Scenario: A Pod shows `CrashLoopBackOff`. What do you do?
+
+```bash
+kubectl logs <pod-name>
+kubectl logs <pod-name> --previous
+kubectl describe pod <pod-name>
+```
+
+Check application startup errors, environment variables, configuration, dependency availability, exit codes, and resource-related terminations.
+
+The `--previous` option is useful when a container has restarted and its previous logs are available.
+
+### Q48. Scenario: A Pod shows `ImagePullBackOff`. What do you check?
+
+1. Verify the image name and tag.
+2. Check registry availability.
+3. Check image-pull credentials for private registries.
+4. Inspect Pod events.
+5. Verify node connectivity and registry permissions.
+
+```bash
+kubectl describe pod <pod-name>
+```
+
+Do not repeatedly restart the Pod without correcting the underlying image or authentication problem.
+
+### Q49. Scenario: All Pods are Running, but the application is not accessible.
+
+Check in this order:
+
+1. Is the application listening on the expected port?
+2. Is the Service selector correct?
+3. Are the backend Pods ready?
+4. Do the Service ports and `targetPort` match?
+5. Do EndpointSlices contain the expected backends?
+6. Are DNS, network policies, routes, firewall rules, and external exposure configured correctly?
+
+```bash
+kubectl get pods --show-labels
+kubectl get svc
+kubectl get endpointslices
+kubectl describe svc <service-name>
+kubectl logs <pod-name>
+```
+
+### Q50. Scenario: A Deployment has four replicas, but only two Pods are Running.
+
+Inspect the Deployment, ReplicaSet, Pods, and events.
+
+```bash
+kubectl get deployment
+kubectl get replicasets
+kubectl get pods -o wide
+kubectl describe deployment <deployment-name>
+kubectl get events
+```
+
+Possible causes include insufficient capacity, image-pull failures, scheduling constraints, invalid configuration, or application crashes.
+
+The Deployment requests four replicas, but Kubernetes can only maintain four running replicas if the cluster and workload conditions permit it.
+
+### Q51. Scenario: A Pod was deleted manually. Will it come back?
+
+If the Pod is managed by a Deployment, ReplicaSet, StatefulSet, or another appropriate controller, that controller generally attempts to restore the desired workload state.
+
+A standalone Pod will not automatically recreate itself after deletion.
+
+### Q52. Scenario: A new application version was deployed, but users are receiving errors. What do you do?
+
+1. Inspect rollout status and history.
+2. Check the new Pods' logs and readiness.
+3. Verify application configuration and dependencies.
+4. Roll back if necessary and if a suitable previous revision is available.
+5. Investigate the root cause before trying the deployment again.
+
+```bash
+kubectl rollout status deployment/web
+kubectl rollout history deployment/web
+kubectl rollout undo deployment/web
+```
+
+### Q53. Scenario: HPA does not increase replicas even when traffic increases.
+
+Check:
+- Whether HPA reports valid metrics.
+- Whether a metrics pipeline is available.
+- Whether CPU requests are configured for utilization-based scaling.
+- Whether the maximum replica count has been reached.
+- Whether node capacity or scheduling constraints prevent additional Pods from running.
+
+```bash
+kubectl describe hpa <hpa-name>
+kubectl top pods
+kubectl get events
+```
+
+### Q54. Scenario: A PVC remains Pending.
+
+Check the PVC events, StorageClass, provisioner, access modes, and storage capacity.
+
+```bash
+kubectl describe pvc <pvc-name>
+kubectl get storageclass
+kubectl get pv
+kubectl get events
+```
+
+In a cloud cluster, also investigate the storage driver, permissions, topology, and provisioning configuration.
+
+### Q55. Scenario: A Pod cannot connect to another application Pod.
+
+Verify:
+- The destination Service name and namespace.
+- DNS resolution.
+- Service selectors and EndpointSlices.
+- Destination port and application listening port.
+- NetworkPolicy rules.
+- Routing and network-plugin health.
+
+```bash
+kubectl get svc
+kubectl get endpointslices
+kubectl get networkpolicy
+kubectl exec -it <pod-name> -- sh
+```
+
+Run connectivity tests from a suitable diagnostic container if the application image does not contain networking tools.
+
+---
+
+# 9. Advanced Interview Questions
+
+### Q56. What is the difference between readiness failure and liveness failure?
+
+A readiness failure marks the container as not ready for traffic; it does not by itself restart the container.
+
+A liveness failure can trigger a container restart after the configured failure threshold is reached.
+
+### Q57. Why can a Pod remain Pending even when nodes show available CPU and memory?
+
+Other scheduling constraints may prevent placement, including node affinity, taints, topology constraints, PVC binding, or resource requests that cannot fit on any eligible individual node.
+
+### Q58. Why might `kubectl get pods` show Running even when the application is unavailable?
+
+Running is a Pod phase, not proof that the application is ready or reachable. A container may be running while the process is unhealthy, its dependencies are unavailable, or its Service and network configuration is incorrect.
+
+### Q59. What is the difference between a Deployment and a StatefulSet during updates?
+
+Deployments manage ReplicaSets and generally suit stateless workloads. StatefulSets maintain stable Pod identities and support ordered deployment and scaling behaviors useful for stateful applications.
+
+### Q60. How do you upgrade a Kubernetes application without unnecessary downtime?
+
+Use appropriate readiness probes, multiple replicas, a safe rolling-update strategy, graceful shutdown, backward-compatible application changes, and sufficient cluster capacity. Verify rollout health and maintain a rollback plan.
+
+Zero downtime is not guaranteed by a rolling update alone; application and infrastructure design matter.
+
+### Q61. How do you troubleshoot a node in NotReady state?
+
+```bash
+kubectl get nodes
+kubectl describe node <node-name>
+kubectl get events -A
+```
+
+Check node conditions, kubelet health, networking, disk pressure, memory pressure, and the availability of the control plane and node runtime. Cloud environments may also require checking instance and network health.
+
+### Q62. What is the difference between a Job and a CronJob?
+
+A Job runs a finite task to completion. A CronJob creates Jobs on a schedule.
+
+Use a Job for a one-time migration and a CronJob for a recurring scheduled task.
+
+### Q63. How do you expose an application securely over HTTPS?
+
+Choose a suitable external routing mechanism, such as a LoadBalancer Service or Ingress controller, configure TLS certificates, secure DNS and firewall rules, and apply appropriate authentication and network restrictions.
+
+The exact implementation depends on the cluster platform and traffic architecture.
+
+### Q64. How do you debug a failing application without modifying the production workload?
+
+Start with read-only diagnostics such as `kubectl get`, `describe`, `logs`, `events`, and metrics. Where needed, use an approved diagnostic Pod or ephemeral container according to the team's access and security procedures.
+
+Avoid changing production resources until the failure is understood and the change is authorized.
+
+### Q65. What happens when a Deployment's container image is changed?
+
+The Deployment's Pod template changes. Kubernetes creates a new ReplicaSet and carries out a rollout according to the Deployment strategy. The new Pods must be schedulable, pull the image, start successfully, and become ready for the rollout to progress.
+
+---
+
+# 10. Essential Interview Commands
+
+```bash
+# Cluster information
+kubectl cluster-info
+kubectl get nodes -o wide
+
+# Pods and workloads
+kubectl get pods -A
+kubectl get deployments
+kubectl get replicasets
+kubectl get statefulsets
+
+# Debugging
+kubectl describe pod <pod-name>
+kubectl logs <pod-name>
+kubectl logs <pod-name> --previous
+kubectl get events
+
+# Networking
+kubectl get services
+kubectl get endpointslices
+kubectl get ingress
+
+# Storage
+kubectl get pv
+kubectl get pvc
+kubectl get storageclass
+
+# Scaling and rollouts
+kubectl scale deployment <name> --replicas=4
+kubectl rollout status deployment/<name>
+kubectl rollout history deployment/<name>
+kubectl rollout undo deployment/<name>
+
+# Resource usage
+kubectl top nodes
+kubectl top pods
+
+# Manifest validation
+kubectl apply --dry-run=client -f <file.yaml>
+kubectl diff -f <file.yaml>
+```
+
+---
+
+## Final Interview Preparation Advice
+
+For each question, prepare to explain:
+
+1. **Definition:** What the resource or feature is.
+2. **Purpose:** Why it is used.
+3. **Implementation:** How you configure it.
+4. **Troubleshooting:** How you diagnose common failures.
+5. **Scenario:** When you would choose it in a real environment.
+
+**Remember:** Interviewers value clear reasoning and troubleshooting methodology more than memorized definitions alone.
